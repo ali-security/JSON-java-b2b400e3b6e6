@@ -117,4 +117,38 @@ public class Util {
             );
         }
     }
+
+    /**
+     * Runs the given code on a dedicated thread with a large (8 MiB) stack and
+     * returns whatever it threw. The tests may be run with a small stack (for
+     * example -Xss512k), where hundreds of recursive parser frames can exhaust
+     * the stack before a nesting depth limit is reached. Running the code on a
+     * large stack lets a test tell a JSONException raised by the nesting depth
+     * limit apart from a StackOverflowError.
+     *
+     * @param code the code to run
+     * @return the Throwable thrown by the code, or null if it completed normally
+     */
+    public static Throwable throwableFromLargeStack(final Runnable code) {
+        final Throwable[] thrown = new Throwable[1];
+        Thread thread = new Thread(null, new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    code.run();
+                } catch (Throwable t) {
+                    thrown[0] = t;
+                }
+            }
+        }, "large-stack-test", 8L * 1024 * 1024);
+        thread.start();
+        try {
+            thread.join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(
+                "Interrupted while waiting for the large stack test thread", e);
+        }
+        return thrown[0];
+    }
 }
